@@ -1,0 +1,2 @@
+cytrader @ git+https://github.com/Saran33/cytrader.git
+ccxt @ git+https://github.com/Saran33/ccxt.git#egg=ccxt\&subdirectory=python
