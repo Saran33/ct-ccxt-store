@@ -125,7 +125,7 @@ class CCXTBroker(with_metaclass(MetaCCXTBroker, BrokerBase)):
 
         self.store = CCXTStore(**kwargs)
 
-        self.currency = self.store.currency
+        self.quote = self.store.quote
 
         self.positions = collections.defaultdict(Position)
 
@@ -143,20 +143,22 @@ class CCXTBroker(with_metaclass(MetaCCXTBroker, BrokerBase)):
 
         self.use_order_params = True
 
+        self._leverage = 1.0
+
     def get_balance(self):
         self.store.get_balance()
         self.cash = self.store._cash
         self.value = self.store._value
         return self.cash, self.value
 
-    def get_wallet_balance(self, currency, params={}):
-        balance = self.store.get_wallet_balance(currency, params=params)
+    def get_wallet_balance(self, quote, params={}):
+        balance = self.store.get_wallet_balance(quote, params=params)
         try:
-            cash = balance['free'][currency] if balance['free'][currency] else 0
+            cash = balance['free'][quote] if balance['free'][quote] else 0
         except KeyError:  # never funded or eg. all USD exchanged
             cash = 0
         try:
-            value = balance['total'][currency] if balance['total'][currency] else 0
+            value = balance['total'][quote] if balance['total'][quote] else 0
         except KeyError:  # never funded or eg. all USD exchanged
             value = 0
         return cash, value
@@ -164,14 +166,24 @@ class CCXTBroker(with_metaclass(MetaCCXTBroker, BrokerBase)):
     def getcash(self):
         # Get cash seems to always be called before get value
         # Therefore it makes sense to add getbalance here.
-        # return self.store.getcash(self.currency)
+        # return self.store.getcash(self.quote)
         self.cash = self.store._cash
         return self.cash
 
     def getvalue(self, datas=None):
-        # return self.store.getvalue(self.currency)
-        self.value = self.store._value
-        return self.value
+        # # return self.store.getvalue(self.quote)
+        # self.value = self.store._value
+        # return self.value
+        if datas:
+            for data in datas:
+                free, locked = self.get_wallet_balance(data.base)
+                print("BASE:", data.base)
+                print("free:", free, "locked:", locked)
+                dvalue = free * data.close[0] * self._leverage
+                return dvalue
+        else:
+            self.value = self.store._value
+            return self.value
 
     def get_notification(self):
         try:

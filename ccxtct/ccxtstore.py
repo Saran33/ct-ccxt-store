@@ -54,6 +54,7 @@ class CCXTStore(with_metaclass(MetaSingleton, object)):
         The method will allow setting parameters. Useful for getting margin balances
 
     Added new private_end_point method to allow using any private non-unified end point
+    quote: quote currency.
 
     '''
 
@@ -95,27 +96,27 @@ class CCXTStore(with_metaclass(MetaSingleton, object)):
         '''Returns broker with *args, **kwargs from registered ``BrokerCls``'''
         return cls.BrokerCls(*args, **kwargs)
 
-    def __init__(self, exchange, currency, config, retries, debug=False, verbose=False, sandbox=False):
+    def __init__(self, exchange, quote, config, retries, debug=False, verbose=False, sandbox=False):
         self.exchange = getattr(ccxt, exchange)(config)
         if sandbox:
             self.exchange.set_sandbox_mode(True)
-        self.currency = currency
+        self.quote = quote
         self.retries = retries
         self.debug = debug
         self.verbose = verbose
         balance = self.exchange.fetch_balance() if 'secret' in config else 0
         try:
-            if balance == 0 or not balance['free'][currency]:
+            if balance == 0 or not balance['free'][quote]:
                 self._cash = 0
             else:
-                self._cash = balance['free'][currency]
+                self._cash = balance['free'][quote]
         except KeyError:  # never funded or eg. all USD exchanged 
             self._cash = 0
         try:
-            if balance == 0 or not balance['total'][currency]:
+            if balance == 0 or not balance['total'][quote]:
                 self._value = 0
             else:
-                self._value = balance['total'][currency]
+                self._value = balance['total'][quote]
         except KeyError:
             self._value = 0
 
@@ -152,7 +153,7 @@ class CCXTStore(with_metaclass(MetaSingleton, object)):
         return retry_method
 
     @retry
-    def get_wallet_balance(self, currency, params=None):
+    def get_wallet_balance(self, quote, params=None):
         balance = self.exchange.fetch_balance(params)
         return balance
 
@@ -160,8 +161,8 @@ class CCXTStore(with_metaclass(MetaSingleton, object)):
     def get_balance(self):
         balance = self.exchange.fetch_balance()
 
-        cash = balance['free'][self.currency]
-        value = balance['total'][self.currency]
+        cash = balance['free'][self.quote]
+        value = balance['total'][self.quote]
         # Fix if None is returned
         self._cash = cash if cash else 0
         self._value = value if value else 0
@@ -169,7 +170,7 @@ class CCXTStore(with_metaclass(MetaSingleton, object)):
     @retry
     def getposition(self):
         return self._value
-        # return self.getvalue(currency)
+        # return self.getvalue(quote)
 
     # @retry
     def create_order(self, symbol, order_type, side, amount, price, params):
