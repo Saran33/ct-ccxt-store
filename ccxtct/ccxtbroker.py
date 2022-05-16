@@ -144,6 +144,7 @@ class CCXTBroker(with_metaclass(MetaCCXTBroker, BrokerBase)):
         self.use_order_params = True
 
         self._leverage = 1.0
+        self.futures = self.store.futures
 
     def get_balance(self):
         self.store.get_balance()
@@ -177,7 +178,6 @@ class CCXTBroker(with_metaclass(MetaCCXTBroker, BrokerBase)):
         if datas:
             for data in datas:
                 free, locked = self.get_wallet_balance(data.base)
-                print("BASE:", data.base)
                 print("free:", free, "locked:", locked)
                 dvalue = free * data.close[0] * self._leverage
                 return dvalue
@@ -196,7 +196,8 @@ class CCXTBroker(with_metaclass(MetaCCXTBroker, BrokerBase)):
 
     def getposition(self, data, clone=True):
         # return self.o.getposition(data._dataname, clone=clone)
-        pos = self.positions[data._dataname]
+        # pos = self.positions[data._dataname]
+        pos = self.positions[data._name]
         if clone:
             pos = pos.clone()
         return pos
@@ -364,3 +365,18 @@ class CCXTBroker(with_metaclass(MetaCCXTBroker, BrokerBase)):
             method_str = 'private_' + type.lower() + endpoint_str.lower()
 
         return self.store.private_end_point(type=type, endpoint=method_str, params=params)
+
+
+    def updatePortfolio(self, data):
+        '''Added this method to set the initial portfolio positions
+           if there are existing holdings in the account.
+        '''
+        size, locked = self.get_wallet_balance(data.base)
+        if abs(size) > 0:
+            granularity = self.store.get_granularity(data._timeframe, data._compression)
+            ohlcv = self.store.fetch_ohlcv(data.p.dataname, timeframe=granularity, since=None, limit=1)
+            close = ohlcv[0][4]
+            position = Position(size, close)
+            if self.debug:
+                print(f'OPENING POSITION: {data.p.name}: {position.size}')
+            self.positions[data.p.name] = position

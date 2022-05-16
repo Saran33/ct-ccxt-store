@@ -96,7 +96,7 @@ class CCXTStore(with_metaclass(MetaSingleton, object)):
         '''Returns broker with *args, **kwargs from registered ``BrokerCls``'''
         return cls.BrokerCls(*args, **kwargs)
 
-    def __init__(self, exchange, quote, config, retries, debug=False, verbose=False, sandbox=False):
+    def __init__(self, exchange, quote, config, retries, debug=False, verbose=False, sandbox=False, futures=False):
         self.exchange = getattr(ccxt, exchange)(config)
         if sandbox:
             self.exchange.set_sandbox_mode(True)
@@ -104,6 +104,7 @@ class CCXTStore(with_metaclass(MetaSingleton, object)):
         self.retries = retries
         self.debug = debug
         self.verbose = verbose
+        self.futures = futures
         balance = self.exchange.fetch_balance() if 'secret' in config else 0
         try:
             if balance == 0 or not balance['free'][quote]:
@@ -223,3 +224,4 @@ class CCXTStore(with_metaclass(MetaSingleton, object)):
         print(dir(ccxt.hitbtc()))
         '''
         return getattr(self.exchange, endpoint)(params)
+
