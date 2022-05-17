@@ -177,8 +177,12 @@ class CCXTStore(with_metaclass(MetaSingleton, object)):
     def create_order(self, symbol, order_type, side, amount, price, params):
         # returns the order
         print(symbol, order_type, side, amount, price, params)
-        return self.exchange.create_order(symbol=symbol, type=order_type, side=side,
-                                          amount=amount, price=price, params=params)
+        if order_type == 'market':
+            return self.exchange.create_order(symbol=symbol, type=order_type, side=side,
+                                            amount=amount, params=params)
+        else:
+            return self.exchange.create_order(symbol=symbol, type=order_type, side=side,
+                                            amount=amount, price=price, params=params)
 
     @retry
     def cancel_order(self, order_id, symbol):

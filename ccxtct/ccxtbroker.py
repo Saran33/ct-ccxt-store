@@ -154,15 +154,37 @@ class CCXTBroker(with_metaclass(MetaCCXTBroker, BrokerBase)):
 
     def get_wallet_balance(self, quote, params={}):
         balance = self.store.get_wallet_balance(quote, params=params)
-        try:
-            cash = balance['free'][quote] if balance['free'][quote] else 0
-        except KeyError:  # never funded or eg. all USD exchanged
-            cash = 0
-        try:
-            value = balance['total'][quote] if balance['total'][quote] else 0
-        except KeyError:  # never funded or eg. all USD exchanged
-            value = 0
+        # try:
+        cash = balance['free'][quote] if balance['free'][quote] else 0
+        # except KeyError:  # never funded or eg. all USD exchanged
+        #     cash = 0
+        # try:
+        value = balance['total'][quote] if balance['total'][quote] else 0
+        # except KeyError:  # never funded or eg. all USD exchanged
+        #     value = 0
         return cash, value
+
+    def get_ccxt_position(self, data, params={}):
+        '''Get open position for a data.'''
+        ticker = data.p.name
+        balance = self.store.exchange.fetch_balance(params)
+        positions = balance['info']['positions']
+        position = [position for position in positions if position['symbol'] == ticker];
+        return position[0];
+
+    def get_position_size(self, data):
+        '''Get the base quantity of an open position.'''
+        position = self.get_ccxt_position(data)
+        if self.debug:
+            print("positionAmt:", position['positionAmt'])
+        return float(position['positionAmt']) if position else 0.
+
+    def get_notional(self, data):
+        '''Get the notional value of an open position.'''
+        position = self.get_ccxt_position(data)
+        if self.debug:
+            print("NOTIONAL:", position['notional'])
+        return float(position['notional']) if position else 0.
 
     def getcash(self):
         # Get cash seems to always be called before get value
@@ -177,9 +199,12 @@ class CCXTBroker(with_metaclass(MetaCCXTBroker, BrokerBase)):
         # return self.value
         if datas:
             for data in datas:
-                free, locked = self.get_wallet_balance(data.base)
-                print("free:", free, "locked:", locked)
-                dvalue = free * data.close[0] * self._leverage
+                if self.futures:
+                    dvalue = self.get_notional(data)
+                else:
+                    free, locked = self.get_wallet_balance(data.base)
+                    print("free:", free, "locked:", locked)
+                    dvalue = free * data.close[0] * self._leverage
                 return dvalue
         else:
             self.value = self.store._value
@@ -218,23 +243,35 @@ class CCXTBroker(with_metaclass(MetaCCXTBroker, BrokerBase)):
             ccxt_order = self.store.fetch_order(oID, o_order.data.p.dataname)
 
             # Check for new fills
-            if 'trades' in ccxt_order and ccxt_order['trades'] is not None:
+            if 'trades' in ccxt_order and len(ccxt_order['trades']):
                 for fill in ccxt_order['trades']:
                     if fill not in o_order.executed_fills:
                         o_order.execute(fill['datetime'], fill['amount'], fill['price'],
-                                        0, 0.0, 0.0,
+                                        0, fill['cost'], 0.0,
                                         0, 0.0, 0.0,
                                         0.0, 0.0,
                                         0, 0.0)
                         o_order.executed_fills.append(fill['id'])
+                        if self.debug:
+                            print("FILLED:", fill['datetime'], fill['amount'], fill['price'])
+
+            elif ccxt_order[self.mappings['closed_order']['key']] == self.mappings['closed_order']['value']:
+                o_order.execute(ccxt_order['datetime'], ccxt_order['amount'], ccxt_order['price'],
+                                        0, ccxt_order['cost'], 0.0,
+                                        0, 0.0, 0.0,
+                                        0.0, 0.0,
+                                        0, 0.0)
+                if self.debug:
+                    print("FILLED:", ccxt_order['datetime'], ccxt_order['amount'], ccxt_order['price'])
 
             if self.debug:
-                print(json.dumps(ccxt_order, indent=self.indent))
+                print("CCXT ORDER:", json.dumps(ccxt_order, indent=self.indent))
 
             # Check if the order is closed
             if ccxt_order[self.mappings['closed_order']['key']] == self.mappings['closed_order']['value']:
                 pos = self.getposition(o_order.data, clone=False)
-                pos.update(o_order.size, o_order.price)
+                # pos.update(o_order.size, o_order.price)
+                pos.update(o_order.size, o_order.ccxt_order['price'])
                 o_order.completed()
                 self.notify(o_order)
                 self.open_orders.remove(o_order)
@@ -278,6 +315,8 @@ class CCXTBroker(with_metaclass(MetaCCXTBroker, BrokerBase)):
         order = CCXTOrder(owner, data, _order)
         order.price = ret_ord['price']
         self.open_orders.append(order)
+        if self.debug:
+            print("ORDER:", order, 'PRICE:', order.price, "STATUS:", order.status)
 
         self.notify(order)
         return order
@@ -371,12 +410,17 @@ class CCXTBroker(with_metaclass(MetaCCXTBroker, BrokerBase)):
         '''Added this method to set the initial portfolio positions
            if there are existing holdings in the account.
         '''
-        size, locked = self.get_wallet_balance(data.base)
+        if self.futures:
+            print("FUTURES")
+            size = self.get_position_size(data)
+        else:
+            print("SPOT")
+            size, locked = self.get_wallet_balance(data.base)
         if abs(size) > 0:
             granularity = self.store.get_granularity(data._timeframe, data._compression)
             ohlcv = self.store.fetch_ohlcv(data.p.dataname, timeframe=granularity, since=None, limit=1)
             close = ohlcv[0][4]
-            position = Position(size, close)
+            pos = Position(size=size, price=close)
             if self.debug:
-                print(f'OPENING POSITION: {data.p.name}: {position.size}')
-            self.positions[data.p.name] = position
+                print(f'OPENING POSITION: {data.p.name}: {pos.size}')
+            self.positions[data._name] = pos

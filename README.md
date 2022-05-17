@@ -2,6 +2,9 @@
 A fork of Dave-Vallance's CCXT Store for compatibility with Cython-based fork of Backtrader, [Cytrader](https://github.com/Saran33/cytrader.git).
 - Included a `broker.updatePortfolio` method for setting initial portfolio positions if there are any existing holdings in the account at the time of initial strategy execution.
 - Modified `broker.getvalue` to enable rebalancing positions based on a target value.
+- Debugged `create_order` to omit a price paramater for market orders, which was throwing errors for Binance futures.
+- Debugged `broker.next` method to correctly register (`execute`) both partial and full fills within the Backtrader system, along with their fill value.
+- Added support for futures trading, such as `getvalue` returning notional position value if futures mode is activated.
 - For a working example, see [_Cytrade](https://github.com/Saran33/_Cytrade).
 
 Installation
