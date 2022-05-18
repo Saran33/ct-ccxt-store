@@ -5,6 +5,7 @@ A fork of Dave-Vallance's CCXT Store for compatibility with Cython-based fork of
 - Debugged `create_order` to omit a price paramater for market orders, which was throwing errors for Binance futures.
 - Debugged `broker.next` method to correctly register (`execute`) both partial and full fills within the Backtrader system, along with their fill value.
 - Added support for futures trading, such as `getvalue` returning notional position value if futures mode is activated.
+- Added `ccxtcomminfo.py` with a commission info scheme for Binance futures, in order to include a rough calculation for funding rate fees.
 - For a working example, see [_Cytrade](https://github.com/Saran33/_Cytrade).
 
 Installation
